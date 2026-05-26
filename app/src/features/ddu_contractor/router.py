@@ -1,0 +1,11 @@
+from fastapi import APIRouter
+from src.routers import api_prefix_config
+
+from .deps import DduContractorServiceDep
+
+router = APIRouter(prefix=api_prefix_config.v1.ddu_contractors, tags=["Ddu Contractor"])
+
+
+@router.get("/")
+async def list_ddu_contractors(ddu_service_contractor: DduContractorServiceDep):
+    return await ddu_service_contractor.list_ddu_contractor()

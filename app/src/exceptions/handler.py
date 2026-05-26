@@ -1,0 +1,83 @@
+from dataclasses import dataclass
+
+from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse
+from loguru import logger
+
+from .infra import (
+    CheckConstraintError,
+    DatabaseConfigurationError,
+    DataIntegrityError,
+    DuplicateKeyError,
+    ForeignKeyError,
+    InfrastructureError,
+    UnexpectedDatabaseError,
+)
+
+
+@dataclass(slots=True, frozen=True)
+class ErrorResponse:
+    status_code: int
+    detail: str
+
+
+_INFRASTRUCTURE_MESSAGES: dict[
+    type[InfrastructureError],
+    ErrorResponse,
+] = {
+    DuplicateKeyError: ErrorResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="A record matching the supplied data already exists.",
+    ),
+    ForeignKeyError: ErrorResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="A foreign key is missing or invalid.",
+    ),
+    CheckConstraintError: ErrorResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="The data failed a validation check.",
+    ),
+    DataIntegrityError: ErrorResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="There was a data validation error during processing.",
+    ),
+    DatabaseConfigurationError: ErrorResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Something went wrong while processing your request.",
+    ),
+    UnexpectedDatabaseError: ErrorResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Something went wrong while processing your request.",
+    ),
+}
+
+
+def _json_error(
+    status_code: int,
+    detail: str | dict,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={"detail": detail},
+    )
+
+
+def register_infrastructure_handlers(app: FastAPI) -> None:
+    for exc_type, response in _INFRASTRUCTURE_MESSAGES.items():
+
+        @app.exception_handler(exc_type)
+        async def handler(
+            _request: Request,
+            exc: InfrastructureError,
+            response: ErrorResponse = response,
+        ) -> JSONResponse:
+            logger.exception(
+                "%s: %s",
+                type(exc).__name__,
+                exc,
+            )
+
+            return _json_error(
+                status_code=response.status_code,
+                detail=response.detail,
+            )

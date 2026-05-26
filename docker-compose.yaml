@@ -1,0 +1,20 @@
+services:
+  backend:
+    build:
+      dockerfile: ./Dockerfile
+      context: ./
+    ports:
+      - "80:8000"
+    env_file:
+      - path: ./app/.env
+        required: true
+    # volumes:
+    #   - ./app:/app
+
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./app
+          target: /app
+        - action: rebuild
+          path: ./pyproject.toml
